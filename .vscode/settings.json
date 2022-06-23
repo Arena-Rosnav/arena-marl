@@ -1,0 +1,16 @@
+{
+  "python.autoComplete.extraPaths": [
+    "/home/reyk/.cache/pypoetry/virtualenvs/arena-marl-8fpEyD0H-py3.8/lib/python3.8/site-packages",
+    "/home/reyk/Schreibtisch/Uni/IGNC/arena-marl/devel/lib/python3/dist-packages",
+    "/home/reyk/Schreibtisch/Uni/IGNC/arena-marl/src/planners/rosnav",
+    "/home/reyk/Schreibtisch/Uni/IGNC/arena-marl/src/arena-marl/task_generator",
+    "/home/reyk/Schreibtisch/Uni/IGNC/arena-marl/src/arena-marl/rl_utils"
+  ],
+  "python.analysis.extraPaths": [
+    "/home/reyk/.cache/pypoetry/virtualenvs/arena-marl-8fpEyD0H-py3.8/lib/python3.8/site-packages",
+    "/home/reyk/Schreibtisch/Uni/IGNC/arena-marl/src/planners/rosnav",
+    "/home/reyk/Schreibtisch/Uni/IGNC/arena-marl/devel/lib/python3/dist-packages",
+    "/home/reyk/Schreibtisch/Uni/IGNC/arena-marl/src/arena-marl/task_generator",
+    "/home/reyk/Schreibtisch/Uni/IGNC/arena-marl/src/arena-marl/rl_utils"
+  ]
+}
