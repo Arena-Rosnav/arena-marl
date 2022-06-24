@@ -10,10 +10,6 @@ import rospy
 import rospkg
 from multiprocessing import cpu_count, set_start_method
 
-# from stable_baselines3 import PPO
-# from supersuit.vector import MakeCPUAsyncConstructor, ConcatVecEnv
-# from supersuit.vector.sb3_vector_wrapper import SB3VecEnvWrapper
-
 from rosnav.model.agent_factory import (
     AgentFactory,
 )
