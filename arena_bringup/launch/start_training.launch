@@ -18,7 +18,7 @@
   <param name="local_planner" value="$(arg local_planner)"/>
 
   <!-- Here are the argument that may be frequently changed -->
-  <arg name="ns_prefix" default="sim" />
+  <arg name="ns_prefix" default="/sim_" />
   <arg name="num_envs" default="1" />
   <arg name="num_robots" default="1" />
   
@@ -62,7 +62,7 @@
   <!-- map server-->
   <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_path)">
     <!-- In multi-env training /clock not available, since we only want one map_server, it's clock topic is remapped to /clock -->
-    <remap from="/clock" to="/$(arg ns_prefix)_1/clock" />
+    <remap from="/clock" to="/$(arg ns_prefix)1/clock" />
   </node>
 
   <group if="$(eval arg('train_mode') == false)">

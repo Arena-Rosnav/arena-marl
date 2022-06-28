@@ -33,8 +33,6 @@ import numpy as np
 
 from std_msgs.msg import Bool
 
-from rl_agent.utils.debug import timeit
-
 
 class ObservationCollector:
     def __init__(
