@@ -19,8 +19,25 @@ from flatland_msgs.srv import (
 )
 from geometry_msgs.msg import Pose2D, PoseStamped
 from nav_msgs.msg import OccupancyGrid
+from nav_msgs.srv import GetMap
+
 
 from .utils import generate_freespace_indices, get_random_pos_on_map
+
+# static directory structure
+get_robot_as = lambda robot_type: os.path.join(
+    rospkg.RosPack().get_path("arena-simulation-setup"),
+    "robot",
+    f"{robot_type}",
+    "default_settings.yaml",
+)
+
+get_robot_yaml = lambda robot_type: os.path.join(
+    rospkg.RosPack().get_path("arena-simulation-setup"),
+    "robot",
+    f"{robot_type}",
+    f"{robot_type}.model.yaml",
+)
 
 
 class RobotManager:
@@ -33,7 +50,6 @@ class RobotManager:
         self,
         ns: str,
         map_: OccupancyGrid,
-        robot_yaml_path: str,
         robot_type: str,
         robot_id: str = "myrobot",
         timeout=20,
@@ -43,9 +59,10 @@ class RobotManager:
         Args:
             ns(namespace): if ns == '', we will use global namespace
             map_ (OccupancyGrid): the map info
-            robot_yaml_path (str): the file name of the base robot yaml file.
-
+            robot_type (str): Type of the robot model.
+            robot_id (str, optional): Robot specific namespace, e.g. "sim_1/_robot1_/goal"
         """
+        """SET A METHOD TO EXTRACT IF MARL IS BEIN REQUESTED"""
         self.ns = ns
         self.ns_prefix = f"/{ns}/" if ns else ""
 
@@ -55,7 +72,7 @@ class RobotManager:
         self.is_training_mode = rospy.get_param("/train_mode")
         self.step_size = rospy.get_param("step_size")
 
-        self._get_robot_config(robot_yaml_path)
+        self._get_robot_config()
         robot_yaml_path = self._generate_robot_config_with_adjusted_topics()
 
         # setup proxy to handle  services provided by flatland
@@ -90,22 +107,19 @@ class RobotManager:
         request.ns = self.ns
         self._srv_spawn_model(request)
 
-    def _get_robot_config(self, robot_yaml_path: str) -> None:
+    def _get_robot_config(self) -> None:
         """Get robot info e.g robot name, radius, Laser related infomation
 
         Args:
             robot_yaml_path ([type]): [description]
         """
-        robot_config = os.path.join(
-            rospkg.RosPack().get_path("arena-simulation-setup"),
-            "robot",
-            f"{self.robot_type}",
-            "default_settings.yaml",
-        )
-        with open(robot_config, "r", encoding="utf-8") as target:
+        robot_as_path = get_robot_as(self.robot_type)
+        with open(robot_as_path, "r", encoding="utf-8") as target:
             config = yaml.load(target, Loader=yaml.FullLoader)
+
         self.ROBOT_RADIUS = config["robot"]["radius"]
 
+        robot_yaml_path = get_robot_yaml(self.robot_type)
         with open(robot_yaml_path, "r") as f:
             self._robot_data = yaml.safe_load(f)
 
@@ -124,25 +138,25 @@ class RobotManager:
         Note:
         - The namespaces consist of: [simulation ns] / [robot name] / *topic*\
             e.g.: sim_1/myrobot/scan
-        - The yaml files are temporarily dumped into *../arena-simulation-setup/tmp_robot_configs*
+        - The yaml files are temporarily dumped into *../simulator_setup/tmp_robot_configs*
         """
         self._robot_data["bodies"][0]["name"] = (
-            self.robot_id + "_" + self._robot_data["bodies"][0]["name"]
+            f"{self.robot_id}_" + self._robot_data["bodies"][0]["name"]
         )
 
         for plugin in self._robot_data["plugins"]:
             if plugin["type"] == "DiffDrive":
                 plugin["body"] = self._robot_data["bodies"][0]["name"]
-                plugin["odom_frame_id"] = self.robot_id + "_" + plugin["odom_frame_id"]
-                plugin["odom_pub"] = self.robot_id + "/" + plugin["odom_pub"]
-                plugin["twist_sub"] = (
-                    self.robot_id + "/" + plugin.get("twist_sub", "cmd_vel")
+                plugin["odom_frame_id"] = f"{self.robot_id}_" + plugin["odom_frame_id"]
+                plugin["odom_pub"] = f"{self.robot_id}/" + plugin["odom_pub"]
+                plugin["twist_sub"] = f"{self.robot_id}/" + plugin.get(
+                    "twist_sub", "cmd_vel"
                 )
 
             elif plugin["type"] == "Laser":
-                plugin["topic"] = self.robot_id + "/" + plugin["topic"]
+                plugin["topic"] = f"{self.robot_id}/" + plugin["topic"]
                 plugin["body"] = self._robot_data["bodies"][0]["name"]
-                plugin["frame"] = self.robot_id + "_" + plugin["frame"]
+                plugin["frame"] = f"{self.robot_id}_" + plugin["frame"]
 
         tmp_folder_path = os.path.join(
             rospkg.RosPack().get_path("arena-simulation-setup"), "tmp_robot_configs"
@@ -284,3 +298,20 @@ class RobotManager:
 
     def __mean_square_dist_(self, x, y):
         return math.sqrt(math.pow(x, 2) + math.pow(y, 2))
+
+
+def init_robot_managers(n_envs, robot_type, agent_dict):
+    service_client_get_map = rospy.ServiceProxy("/static_map", GetMap)
+    map_response = service_client_get_map()
+    return {
+        f"sim_{i}": [
+            RobotManager(
+                ns=f"sim_{i}",
+                map_=map_response.map,
+                robot_type=robot_type,
+                robot_id=robots._robot_sim_ns,
+            )
+            for robots in agent_dict[f"sim_{i}"]
+        ]
+        for i in range(1, n_envs + 1)
+    }

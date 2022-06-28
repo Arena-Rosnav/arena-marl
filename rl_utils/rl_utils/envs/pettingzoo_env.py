@@ -1,7 +1,6 @@
 """PettingZoo Environment for Single-/Multi Agent Reinforcement Learning"""
 import numpy as np
 import rospy
-from time import sleep
 from typing import List, Tuple, Dict, Any, Union, Callable
 from gym import spaces
 from pettingzoo import *
@@ -43,13 +42,11 @@ class FlatlandPettingZooEnv(ParallelEnv):
 
     def __init__(
         self,
-        num_agents: int,
-        agent_list_fn: Callable[[int, str, str, str, str], List[TrainingDRLAgent]],
-        PATHS: dict,
+        # agent_list_fn: Callable[[int, str, str, str, str], List[TrainingDRLAgent]],
+        agent_list,
         ns: str = None,
-        task_mode: str = "staged",
+        task_manager_reset: Callable[[str], None] = None,
         max_num_moves_per_eps: int = 1000,
-        agent_list_kwargs: Dict[str, Any] = None,
     ) -> None:
         """Initialization method for the Arena-Rosnav Pettingzoo Environment.
 
@@ -72,11 +69,13 @@ class FlatlandPettingZooEnv(ParallelEnv):
         self._is_train_mode = rospy.get_param("/train_mode")
         self.metadata = {}
 
-        self.agent_list: List[TrainingDRLAgent] = agent_list_fn(
-            num_agents, ns=ns, **(agent_list_kwargs or {})
-        )
+        self.agent_list: List[TrainingDRLAgent] = agent_list
 
-        self.agents = []
+        # self.agent_list: List[TrainingDRLAgent] = agent_list_fn(
+        #     num_agents, ns=ns, **(agent_list_kwargs or {})
+        # )
+
+        self.robot_model, self.agents = agent_list[0].robot_model, []
         # list containing the unique robot namespaces
         # used as identifier
         self.possible_agents = [a._robot_sim_ns for a in self.agent_list]
@@ -89,12 +88,7 @@ class FlatlandPettingZooEnv(ParallelEnv):
         self._validate_agent_list()
 
         # task manager
-        self.task_manager = get_MARL_task(
-            ns=ns,
-            mode=task_mode,
-            robot_ids=[a._robot_sim_ns for a in self.agent_list],
-            PATHS=PATHS,
-        )
+        self.task_manager_reset = task_manager_reset
 
         # service clients
         if self._is_train_mode:
@@ -160,7 +154,7 @@ class FlatlandPettingZooEnv(ParallelEnv):
             self.agent_object_mapping[agent].reward_calculator.reset()
 
         # reset the task manager
-        self.task_manager.reset()
+        self.task_manager_reset(self.robot_model)
         # step one timestep in the simulation to update the scene
         if self._is_train_mode:
             self._sim_step_client()

@@ -48,13 +48,10 @@ class MarkovVectorEnv_patched(MarkovVectorEnv):
 
 def vec_env_create(
     env_fn: Callable,
-    agent_list_fn: Callable,
-    num_robots: int,
-    task_mode: str,
+    agent_list,
+    task_managers: Callable,
     num_cpus: int,
     num_vec_envs: int,
-    PATHS: dict,
-    agent_list_kwargs: dict,
     max_num_moves_per_eps: int,
 ):
     """Function which vectorizes a given environment function in multiple parallel environments.
@@ -79,11 +76,8 @@ def vec_env_create(
         partial(
             env_fn,
             ns=f"sim_{i}",
-            num_agents=num_robots,
-            task_mode=task_mode,
-            agent_list_fn=agent_list_fn,
-            PATHS=PATHS,
-            agent_list_kwargs=agent_list_kwargs,
+            agent_list=agent_list[f"sim_{i}"],
+            task_manager_reset=task_managers[f"sim_{i}"].reset,
             max_num_moves_per_eps=max_num_moves_per_eps,
         )
         for i in range(1, num_vec_envs + 1)
