@@ -26,7 +26,7 @@ class ABSMARLTask(ABC):
     def __init__(
         self,
         obstacles_manager: ObstaclesManager,
-        robot_manager: Dict[str, RobotManager],
+        robot_manager: Dict[str, List[RobotManager]],
     ):
         self.obstacles_manager = obstacles_manager
         self.robot_manager = robot_manager
@@ -143,7 +143,7 @@ class StagedMARLRandomTask(RandomMARLTask):
         self,
         ns: str,
         obstacles_manager: ObstaclesManager = None,
-        robot_manager: List[RobotManager] = None,
+        robot_manager: Dict[str, List[RobotManager]] = None,
         start_stage: int = 1,
         curriculum_file_path: str = None,
     ) -> None:
