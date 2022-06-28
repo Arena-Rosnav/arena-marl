@@ -271,12 +271,12 @@ def get_MARL_task(
     map_response = service_client_get_map()
 
     # use rospkg to get the path where the model config yaml file stored
-    models_folder_path = rospkg.RosPack().get_path("simulator_setup")
+    models_folder_path = rospkg.RosPack().get_path("arena-simulation-setup")
 
     # robot's yaml file is needed to get its configurations etc.
-    robot_model = rospy.get_param("model")
+    robot_model = rospy.get_param("model", "jackal")
     base_robot_yaml = os.path.join(
-        models_folder_path, "robot", f"{robot_model}.model.yaml"
+        models_folder_path, "robot", f"{robot_model}", f"{robot_model}.model.yaml"
     )
 
     robot_manager = [
