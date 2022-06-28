@@ -16,9 +16,11 @@ from .utils.observation_collector import ObservationCollector
 from .utils.reward import RewardCalculator
 
 robot_model = rospy.get_param("model")
-ROOT_ROBOT_PATH = os.path.join(rospkg.RosPack().get_path("simulator_setup"), "robot")
+ROOT_ROBOT_PATH = os.path.join(
+    rospkg.RosPack().get_path("arena-simulation-setup"), "robot"
+)
 DEFAULT_HYPERPARAMETER = os.path.join(
-    rospkg.RosPack().get_path("arena_local_planner_drl"),
+    rospkg.RosPack().get_path("training"),
     "configs",
     "hyperparameters",
     "default.json",
@@ -57,14 +59,14 @@ class BaseDRLAgent(ABC):
         self.robot_model = robot_model
 
         robot_setting_path = os.path.join(
-            ROOT_ROBOT_PATH, f"{self.robot_model}.model.yaml"
+            ROOT_ROBOT_PATH, f"{self.robot_model}", f"{self.robot_model}.model.yaml"
         )
 
         action_space_path = os.path.join(
-            rospkg.RosPack().get_path("arena_local_planner_drl"),
-            "configs",
-            "action_spaces",
-            f"default_settings_{self.robot_model}.yaml",
+            rospkg.RosPack().get_path("arena-simulation-setup"),
+            "robot",
+            f"{self.robot_model}",
+            "default_settings.yaml",
         )
 
         self.load_hyperparameters(path=hyperparameter_path)
@@ -119,8 +121,9 @@ class BaseDRLAgent(ABC):
             "actions_in_obs",
             self._agent_params.get("actions_in_observationspace", False),
         )
-        import rl_agent.model.custom_policy
-        import rl_agent.model.custom_sb3_policy
+
+        import rosnav.model.custom_policy
+        import rosnav.model.custom_sb3_policy
 
     def read_setting_files(
         self, robot_setting_yaml: str, action_space_yaml: str

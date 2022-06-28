@@ -2,9 +2,7 @@ import sys
 import os, sys, rospy, time
 
 from datetime import time
-from functools import partial
 from typing import Callable, List
-from multiprocessing import cpu_count
 
 import rospy
 import rospkg
@@ -16,29 +14,28 @@ from rosnav.model.agent_factory import (
 from rosnav.model.base_agent import (
     BaseAgent,
 )
-from ..tools.custom_mlp_utils import *
+from training.tools.custom_mlp_utils import *
 from rosnav.model.custom_policy import *
 from rosnav.model.custom_sb3_policy import *
 
 # from tools.argsparser import parse_training_args
-from ..tools.staged_train_callback import InitiateNewTrainStage
+from training.tools.staged_train_callback import InitiateNewTrainStage
+from training.tools.argsparser import parse_training_args
 
-from tools.argsparser import parse_training_args
-
-from rl_utils.envs.pettingzoo_env import env_fn
-from rl_utils.utils.supersuit_utils import (
+from rl_utils.rl_utils.envs.pettingzoo_env import env_fn
+from rl_utils.rl_utils.utils.supersuit_utils import (
     vec_env_create,
 )
 
 # from tools.argsparser import parse_marl_training_args
-from ..tools.train_agent_utils import (
+from training.tools.train_agent_utils import (
     get_MARL_agent_name_and_start_time,
     get_paths,
     choose_agent_model,
     load_config,
     initialize_hyperparameters,
 )
-from ..tools import train_agent_utils
+from training.tools import train_agent_utils
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import (
@@ -51,9 +48,9 @@ from stable_baselines3.common.callbacks import (
     MarlEvalCallback,
 )
 
-from ..tools.train_agent_utils import *
+from training.tools.train_agent_utils import *
 
-from rl_utils.training_agent_wrapper import TrainingDRLAgent
+from rl_utils.rl_utils.training_agent_wrapper import TrainingDRLAgent
 from task_generator.tasks import get_MARL_task
 
 

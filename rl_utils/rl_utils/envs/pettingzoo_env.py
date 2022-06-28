@@ -12,9 +12,9 @@ from flatland_msgs.srv import StepWorld, StepWorldRequest
 import supersuit as ss
 
 
-from ..utils.supersuit_utils import MarkovVectorEnv_patched
+from rl_utils.rl_utils.utils.supersuit_utils import MarkovVectorEnv_patched
 
-from rl_utils.training_agent_wrapper import (
+from rl_utils.rl_utils.training_agent_wrapper import (
     TrainingDRLAgent,
 )
 from task_generator.tasks import get_MARL_task
