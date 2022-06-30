@@ -33,7 +33,7 @@ def instantiate_train_drl_agents(
     ns: str = None,
     robot_name_prefix: str = "robot",
     hyperparameter_path: str = os.path.join(
-        rospkg.RosPack().get_path("arena_local_planner_drl"),
+        rospkg.RosPack().get_path("training"),
         "configs",
         "hyperparameters",
         "default.json",

@@ -15,13 +15,12 @@ from rosnav.model.agent_factory import AgentFactory
 from rosnav.model.base_agent import BaseAgent
 from rosnav.model.custom_policy import *
 from rosnav.model.custom_sb3_policy import *
-from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import (
     MarlEvalCallback,
     StopTrainingOnRewardThreshold,
 )
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecNormalize
-from task_generator.tasks import get_MARL_task
+from task_generator.robot_manager import init_robot_managers
+from task_generator.tasks import get_MARL_task, get_task_manager, init_obstacle_manager
 from training.tools import train_agent_utils
 from training.tools.argsparser import parse_training_args
 from training.tools.custom_mlp_utils import *
@@ -50,6 +49,16 @@ def main(args):
     robots, existing_robots = {}, 0
     MARL_NAME, START_TIME = get_MARL_agent_name_and_start_time()
 
+    task_managers = {
+        f"sim_{i}": get_task_manager(
+            ns=f"sim_{i}",
+            mode=config["task_mode"],
+            curriculum_path=config["training_curriculum"]["training_curriculum_file"],
+        )
+        for i in range(1, config["n_envs"] + 1)
+    }
+    obstacle_manager_dict = init_obstacle_manager(n_envs=config["n_envs"])
+
     # create seperate model instances for each robot
     for robot_name, robot_train_params in config["robots"].items():
         # generate agent name and model specific paths
@@ -76,18 +85,38 @@ def main(args):
             n_envs=config["n_envs"],
         )
 
+        # create agent wrapper dict for specific robot
+        # each entry contains list of agents for specfic namespace
+        # e.g. agent_list["sim_1"] -> [TrainingDRLAgent]
+        agent_dict = {
+            f"sim_{i}": instantiate_train_drl_agents(
+                num_robots=robot_train_params["num_robots"],
+                existing_robots=existing_robots,
+                robot_model=robot_name,
+                hyperparameter_path=paths["hyperparams"],
+                ns=f"sim_{i}",
+            )
+            for i in range(1, config["n_envs"] + 1)
+        }
+
+        robot_manager_dict = init_robot_managers(
+            n_envs=config["n_envs"], robot_type=robot_name, agent_dict=agent_dict
+        )
+
+        for i in range(1, config["n_envs"] + 1):
+            task_managers[f"sim_{i}"].set_obstacle_manager(
+                obstacle_manager_dict[f"sim_{i}"]
+            )
+            task_managers[f"sim_{i}"].add_robot_manager(
+                robot_type=robot_name, managers=robot_manager_dict[f"sim_{i}"]
+            )
+
         env = vec_env_create(
             env_fn,
-            instantiate_train_drl_agents,
-            num_robots=robot_train_params["num_robots"],
+            agent_dict,
+            task_managers=task_managers,
             num_cpus=cpu_count() - 1,
             num_vec_envs=config["n_envs"],
-            task_mode=config["task_mode"],
-            PATHS=paths,
-            agent_list_kwargs={
-                "existing_robots": existing_robots,
-                "robot_model": robot_name,
-            },
             max_num_moves_per_eps=config["max_num_moves_per_eps"],
         )
 
@@ -126,16 +155,16 @@ def main(args):
             total_timesteps=n_timesteps,
             reset_num_timesteps=True,
             # Übergib einfach das dict für den aktuellen roboter
-            callback=get_evalcallback(
-                eval_config=config["periodic_eval"],
-                curriculum_config=config["training_curriculum"],
-                stop_training_config=config["stop_training"],
-                train_env=robots[robot_name]["env"],
-                num_robots=robots[robot_name]["robot_train_params"]["num_robots"],
-                num_envs=config["n_envs"],
-                task_mode=config["task_mode"],
-                PATHS=robots[robot_name]["paths"],
-            ),
+            # callback=get_evalcallback(
+            #     eval_config=config["periodic_eval"],
+            #     curriculum_config=config["training_curriculum"],
+            #     stop_training_config=config["stop_training"],
+            #     train_env=robots[robot_name]["env"],
+            #     num_robots=robots[robot_name]["robot_train_params"]["num_robots"],
+            #     num_envs=config["n_envs"],
+            #     task_mode=config["task_mode"],
+            #     PATHS=robots[robot_name]["paths"],
+            # ),
         )
     except KeyboardInterrupt:
         print("KeyboardInterrupt..")
@@ -160,12 +189,14 @@ def get_evalcallback(
     PATHS: dict,
 ) -> MarlEvalCallback:
     """Function which generates an evaluation callback with an evaluation environment.
+
     Args:
         train_env (VecEnv): Vectorized training environment
         num_robots (int): Number of robots in the environment
         num_envs (int): Number of parallel spawned environments
         task_mode (str): Task mode for the current experiment
         PATHS (dict): Dictionary which holds hyperparameters for the experiment
+
     Returns:
         MarlEvalCallback: [description]
     """
