@@ -32,6 +32,7 @@ from training.tools.staged_train_callback import InitiateNewTrainStage
 from training.tools.train_agent_utils import *
 from training.tools.train_agent_utils import (
     choose_agent_model,
+    create_training_setup,
     get_MARL_agent_name_and_start_time,
     get_paths,
     initialize_hyperparameters,
@@ -42,115 +43,21 @@ from training.tools.train_agent_utils import (
 def main(args):
     # load configuration
     config = load_config(args.config)
+    robot_names = [robot for robot in config["robots"].keys()]
 
     # set debug_mode
     rospy.set_param("debug_mode", config["debug_mode"])
 
-    robots, existing_robots = {}, 0
-    MARL_NAME, START_TIME = get_MARL_agent_name_and_start_time()
-
-    task_managers = {
-        f"sim_{i}": get_task_manager(
-            ns=f"sim_{i}",
-            mode=config["task_mode"],
-            curriculum_path=config["training_curriculum"]["training_curriculum_file"],
-        )
-        for i in range(1, config["n_envs"] + 1)
-    }
-    obstacle_manager_dict = init_obstacle_manager(n_envs=config["n_envs"])
-
-    # create seperate model instances for each robot
-    for robot_name, robot_train_params in config["robots"].items():
-        # generate agent name and model specific paths
-        agent_name = (
-            robot_train_params["resume"].split("/")[-1]
-            if robot_train_params["resume"]
-            else f"{robot_name}_{START_TIME}"
-        )
-
-        paths = train_agent_utils.get_paths(
-            MARL_NAME,
-            robot_name,
-            agent_name,
-            robot_train_params,
-            config["training_curriculum"]["training_curriculum_file"],
-            config["eval_log"],
-            config["tb"],
-        )
-
-        # initialize hyperparameters (save to/ load from json)
-        hyper_params = train_agent_utils.initialize_hyperparameters(
-            PATHS=paths,
-            config=robot_train_params,
-            n_envs=config["n_envs"],
-        )
-
-        # create agent wrapper dict for specific robot
-        # each entry contains list of agents for specfic namespace
-        # e.g. agent_list["sim_1"] -> [TrainingDRLAgent]
-        agent_dict = {
-            f"sim_{i}": instantiate_train_drl_agents(
-                num_robots=robot_train_params["num_robots"],
-                existing_robots=existing_robots,
-                robot_model=robot_name,
-                hyperparameter_path=paths["hyperparams"],
-                ns=f"sim_{i}",
-            )
-            for i in range(1, config["n_envs"] + 1)
-        }
-
-        robot_manager_dict = init_robot_managers(
-            n_envs=config["n_envs"], robot_type=robot_name, agent_dict=agent_dict
-        )
-
-        for i in range(1, config["n_envs"] + 1):
-            task_managers[f"sim_{i}"].set_obstacle_manager(
-                obstacle_manager_dict[f"sim_{i}"]
-            )
-            task_managers[f"sim_{i}"].add_robot_manager(
-                robot_type=robot_name, managers=robot_manager_dict[f"sim_{i}"]
-            )
-
-        env = vec_env_create(
-            env_fn,
-            agent_dict,
-            task_managers=task_managers,
-            num_cpus=cpu_count() - 1,
-            num_vec_envs=config["n_envs"],
-            max_num_moves_per_eps=config["max_num_moves_per_eps"],
-        )
-
-        existing_robots += robot_train_params["num_robots"]
-
-        # env = VecNormalize(
-        #     env,
-        #     training=True,
-        #     norm_obs=True,
-        #     norm_reward=True,
-        #     clip_reward=15,
-        #     clip_obs=15,
-        # )
-
-        model = choose_agent_model(
-            agent_name, paths, robot_train_params, env, hyper_params, config["n_envs"]
-        )
-
-        # add configuration for one robot to robots dictionary
-        robots[robot_name] = {
-            "model": model,
-            "env": env,
-            "n_envs": config["n_envs"],
-            "robot_train_params": robot_train_params,
-            "hyper_params": hyper_params,
-            "paths": paths,
-        }
+    # create dicts for all robot types with all necessary parameters,
+    # and instances of the respective models and envs
+    robots = create_training_setup(config)
 
     # set num of timesteps to be generated
     n_timesteps = 40000000 if config["n_timesteps"] is None else config["n_timesteps"]
 
     start = time.time()
     try:
-        model = robots[robot_name]["model"]
+        model = robots[robot_names[0]]["model"]
         model.learn(
             total_timesteps=n_timesteps,
             reset_num_timesteps=True,
@@ -172,7 +79,7 @@ def main(args):
     # update the timesteps the model has trained in total
     # update_total_timesteps_json(n_timesteps, PATHS)
 
-    robots[robot_name][model].env.close()
+    robots[robot_names[0]][model].env.close()
     print(f"Time passed: {time.time() - start}s")
     print("Training script will be terminated")
     sys.exit()

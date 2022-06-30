@@ -1,26 +1,24 @@
 # from math import ceil, sqrt
-from typing import Union
-
 import math
 import os
+from typing import Union
 
-from torch.nn.modules.module import T
-import rospy
 import rospkg
+import rospy
 import tf
 import yaml
-
 from flatland_msgs.srv import (
     MoveModel,
     MoveModelRequest,
-    SpawnModelRequest,
     SpawnModel,
+    SpawnModelRequest,
     StepWorld,
 )
 from geometry_msgs.msg import Pose2D, PoseStamped
 from nav_msgs.msg import OccupancyGrid
 from nav_msgs.srv import GetMap
 
+# from torch.nn.modules.module import T
 
 from .utils import generate_freespace_indices, get_random_pos_on_map
 
@@ -301,6 +299,19 @@ class RobotManager:
 
 
 def init_robot_managers(n_envs, robot_type, agent_dict):
+    """For each namespace (parallel env) generate a list of RobotManager objects.
+    One for object in list for every agent of the current robot type.
+
+    Args:
+        n_envs (int): Number of parallel environments
+        robot_type (str): Type of robot
+        agent_dict (dict[str, list[TrainingDRLAgent]]): Dictionary of env namespaces
+        and their corresponding list of agents for the current robot type
+
+    Returns:
+        dict[str, list[RobotManager]]: Dictionary of env namespaces and their
+        corresponding list of RobotManager objects for all agents of current robot type
+    """
     service_client_get_map = rospy.ServiceProxy("/static_map", GetMap)
     map_response = service_client_get_map()
     return {

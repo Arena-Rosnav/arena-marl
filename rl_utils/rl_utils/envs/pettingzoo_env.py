@@ -1,23 +1,22 @@
 """PettingZoo Environment for Single-/Multi Agent Reinforcement Learning"""
-import numpy as np
-import rospy
-from typing import List, Tuple, Dict, Any, Union, Callable
-from gym import spaces
-from pettingzoo import *
-from pettingzoo.utils import from_parallel, to_parallel
+from typing import Any, Callable, Dict, List, Tuple, Union
 from warnings import warn
 
-import supersuit as ss
+import numpy as np
+import rospy
 
-from rl_utils.rl_utils.utils.supersuit_utils import MarkovVectorEnv_patched
-from rl_utils.rl_utils.training_agent_wrapper import (
-    TrainingDRLAgent,
-)
-from task_generator.tasks import get_MARL_task
+
 from flatland_msgs.srv import StepWorld, StepWorldRequest
+from gym import spaces
+from pettingzoo import *
+from pettingzoo.utils.conversions import from_parallel, to_parallel
+from rl_utils.rl_utils.training_agent_wrapper import TrainingDRLAgent
+from rl_utils.rl_utils.utils.supersuit_utils import MarkovVectorEnv_patched
+from task_generator.tasks import get_MARL_task
 
 # from marl_agent.utils.supersuit_utils import *
 # from rl_agent.utils.supersuit_utils import MarkovVectorEnv_patched
+import supersuit as ss
 
 
 def env_fn(**kwargs: Dict[str, Any]):  # -> VecEnv:

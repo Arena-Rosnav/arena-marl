@@ -1,30 +1,37 @@
-from typing import Union, Type
-
 import argparse
-from datetime import datetime as dt
-import gym
 import json
 import os
-
-import yaml
-import rosnode
-import rospkg
 import time
 import warnings
+from datetime import datetime as dt
+from multiprocessing import cpu_count
+from typing import Type, Union
 
-from stable_baselines3 import PPO
-from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.policies import ActorCriticPolicy
-from stable_baselines3.common.utils import set_random_seed
-
+# import gym
+import rosnode
+import rospkg
+import rospy
+import yaml
 
 # from rl_utils.envs.flatland_gym_env import (
 #     FlatlandEnv,
 # )
+from rl_utils.rl_utils.envs.pettingzoo_env import env_fn
+from rl_utils.rl_utils.utils.supersuit_utils import vec_env_create
+from rl_utils.rl_utils.utils.utils import instantiate_train_drl_agents
 from rosnav.model.agent_factory import AgentFactory
 from rosnav.model.base_agent import BaseAgent
-from .custom_mlp_utils import get_act_fn
-import rospy
+from stable_baselines3 import PPO
+
+# from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.policies import ActorCriticPolicy
+
+# from stable_baselines3.common.utils import set_random_seed
+from task_generator.robot_manager import init_robot_managers
+from task_generator.tasks import get_task_manager, init_obstacle_manager
+from training.tools import train_agent_utils
+
+# from .custom_mlp_utils import get_act_fn
 
 """ 
 Dict containing agent specific hyperparameter keys (for documentation and typing validation purposes)
@@ -95,6 +102,127 @@ def load_config(config_name: str) -> dict:
         config = yaml.load(target, Loader=yaml.FullLoader)
 
     return config
+
+
+def create_training_setup(config: dict) -> dict:
+    """Create training setup from config file
+
+    Args:
+        config (dict): Config file containing training setup
+
+    Returns:
+        dict[dict[string, Any]]: Returns dict for all robot types (names) containing \
+            all necessary parameters, paths, and instances of the training setup \
+                
+            robots[robot_name] = {
+                "model": model,
+                "env": env,
+                "n_envs": config["n_envs"],
+                "robot_train_params": robot_train_params,
+                "hyper_params": hyper_params,
+                "paths": paths,
+            }
+    """
+    robots, existing_robots = {}, 0
+    MARL_NAME, START_TIME = get_MARL_agent_name_and_start_time()
+
+    task_managers = {
+        f"sim_{i}": get_task_manager(
+            ns=f"sim_{i}",
+            mode=config["task_mode"],
+            curriculum_path=config["training_curriculum"]["training_curriculum_file"],
+        )
+        for i in range(1, config["n_envs"] + 1)
+    }
+    obstacle_manager_dict = init_obstacle_manager(n_envs=config["n_envs"])
+
+    # create seperate model instances for each robot
+    for robot_name, robot_train_params in config["robots"].items():
+        # generate agent name and model specific paths
+        agent_name = (
+            robot_train_params["resume"].split("/")[-1]
+            if robot_train_params["resume"]
+            else f"{robot_name}_{START_TIME}"
+        )
+
+        paths = train_agent_utils.get_paths(
+            MARL_NAME,
+            robot_name,
+            agent_name,
+            robot_train_params,
+            config["training_curriculum"]["training_curriculum_file"],
+            config["eval_log"],
+            config["tb"],
+        )
+
+        # initialize hyperparameters (save to/ load from json)
+        hyper_params = train_agent_utils.initialize_hyperparameters(
+            PATHS=paths,
+            config=robot_train_params,
+            n_envs=config["n_envs"],
+        )
+
+        # create agent wrapper dict for specific robot
+        # each entry contains list of agents for specfic namespace
+        # e.g. agent_list["sim_1"] -> [TrainingDRLAgent]
+        agent_dict = {
+            f"sim_{i}": instantiate_train_drl_agents(
+                num_robots=robot_train_params["num_robots"],
+                existing_robots=existing_robots,
+                robot_model=robot_name,
+                hyperparameter_path=paths["hyperparams"],
+                ns=f"sim_{i}",
+            )
+            for i in range(1, config["n_envs"] + 1)
+        }
+
+        robot_manager_dict = init_robot_managers(
+            n_envs=config["n_envs"], robot_type=robot_name, agent_dict=agent_dict
+        )
+
+        for i in range(1, config["n_envs"] + 1):
+            task_managers[f"sim_{i}"].set_obstacle_manager(
+                obstacle_manager_dict[f"sim_{i}"]
+            )
+            task_managers[f"sim_{i}"].add_robot_manager(
+                robot_type=robot_name, managers=robot_manager_dict[f"sim_{i}"]
+            )
+
+        env = vec_env_create(
+            env_fn,
+            agent_dict,
+            task_managers=task_managers,
+            num_cpus=cpu_count() - 1,
+            num_vec_envs=config["n_envs"],
+            max_num_moves_per_eps=config["max_num_moves_per_eps"],
+        )
+
+        existing_robots += robot_train_params["num_robots"]
+
+        # env = VecNormalize(
+        #     env,
+        #     training=True,
+        #     norm_obs=True,
+        #     norm_reward=True,
+        #     clip_reward=15,
+        #     clip_obs=15,
+        # )
+
+        model = choose_agent_model(
+            agent_name, paths, robot_train_params, env, hyper_params, config["n_envs"]
+        )
+
+        # add configuration for one robot to robots dictionary
+        robots[robot_name] = {
+            "model": model,
+            "env": env,
+            "n_envs": config["n_envs"],
+            "robot_train_params": robot_train_params,
+            "hyper_params": hyper_params,
+            "paths": paths,
+        }
+
+    return robots
 
 
 def initialize_hyperparameters(PATHS: dict, config: dict, n_envs: int) -> dict:
@@ -331,9 +459,7 @@ def get_paths(
         if config_params["resume"] is None
         else config_params["resume"],
         "tb": os.path.join(training, "training_logs", "tensorboard", agent_name),
-        "eval": os.path.join(
-            training, "training_logs", "train_eval_log", agent_name
-        ),
+        "eval": os.path.join(training, "training_logs", "train_eval_log", agent_name),
         "robot_setting": os.path.join(
             simulation_setup,
             "robot",
@@ -346,7 +472,9 @@ def get_paths(
         "robot_as": os.path.join(
             simulation_setup, "robot", robot, "default_settings.yaml"
         ),
-        "curriculum": os.path.join(training, "configs", "training_curriculums", curriculum),
+        "curriculum": os.path.join(
+            training, "configs", "training_curriculums", curriculum
+        ),
     }
     rospy.get_param("/debug_mode")
 

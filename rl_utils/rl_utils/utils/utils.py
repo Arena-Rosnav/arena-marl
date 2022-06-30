@@ -5,8 +5,8 @@ from typing import Callable, List
 
 import rospkg
 import rospy
-from base_agent_wrapper import BaseDRLAgent
-from training_agent_wrapper import TrainingDRLAgent
+from rl_utils.rl_utils.base_agent_wrapper import BaseDRLAgent
+from rl_utils.rl_utils.training_agent_wrapper import TrainingDRLAgent
 
 
 def get_hyperparameter_file(filename: str) -> str:
