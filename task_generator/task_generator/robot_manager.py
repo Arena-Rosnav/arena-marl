@@ -46,11 +46,8 @@ class RobotManager:
             robot_yaml_path (str): the file name of the base robot yaml file.
 
         """
-        """SET A METHOD TO EXTRACT IF MARL IS BEIN REQUESTED"""
-        MARL = rospy.get_param("num_robots") > 1
-
         self.ns = ns
-        self.ns_prefix = "" if ns == "" else "/" + ns + "/"
+        self.ns_prefix = f"/{ns}/" if ns else ""
 
         self.robot_id = robot_id
         self.robot_type = robot_type
@@ -59,11 +56,7 @@ class RobotManager:
         self.step_size = rospy.get_param("step_size")
 
         self._get_robot_config(robot_yaml_path)
-        robot_yaml_path = (
-            self._generate_robot_config_with_adjusted_topics()
-            if MARL
-            else robot_yaml_path
-        )
+        robot_yaml_path = self._generate_robot_config_with_adjusted_topics()
 
         # setup proxy to handle  services provided by flatland
         rospy.wait_for_service(f"{self.ns_prefix}move_model", timeout=timeout)
@@ -79,9 +72,7 @@ class RobotManager:
         self._step_world = rospy.ServiceProxy(f"{self.ns_prefix}step_world", StepWorld)
 
         # publisher
-        goal_topic = (
-            f"{self.ns_prefix}{self.robot_id}/goal" if MARL else f"{self.ns_prefix}goal"
-        )
+        goal_topic = f"{self.ns_prefix}{self.robot_id}/goal"
         self._goal_pub = rospy.Publisher(
             f"{goal_topic}", PoseStamped, queue_size=1, latch=True
         )
@@ -90,8 +81,7 @@ class RobotManager:
         self._spawn_robot(robot_yaml_path)
 
         # remove temporary config file
-        if MARL:
-            os.remove(robot_yaml_path)
+        os.remove(robot_yaml_path)
 
     def _spawn_robot(self, robot_yaml_path: str) -> None:
         request = SpawnModelRequest()
@@ -107,10 +97,10 @@ class RobotManager:
             robot_yaml_path ([type]): [description]
         """
         robot_config = os.path.join(
-            rospkg.RosPack().get_path("arena_local_planner_drl"),
-            "configs",
-            "action_spaces",
-            "default_settings_" + self.robot_type + ".yaml",
+            rospkg.RosPack().get_path("arena-simulation-setup"),
+            "robot",
+            f"{self.robot_type}",
+            "default_settings.yaml",
         )
         with open(robot_config, "r", encoding="utf-8") as target:
             config = yaml.load(target, Loader=yaml.FullLoader)
@@ -134,7 +124,7 @@ class RobotManager:
         Note:
         - The namespaces consist of: [simulation ns] / [robot name] / *topic*\
             e.g.: sim_1/myrobot/scan
-        - The yaml files are temporarily dumped into *../simulator_setup/tmp_robot_configs*
+        - The yaml files are temporarily dumped into *../arena-simulation-setup/tmp_robot_configs*
         """
         self._robot_data["bodies"][0]["name"] = (
             self.robot_id + "_" + self._robot_data["bodies"][0]["name"]
@@ -155,7 +145,7 @@ class RobotManager:
                 plugin["frame"] = self.robot_id + "_" + plugin["frame"]
 
         tmp_folder_path = os.path.join(
-            rospkg.RosPack().get_path("simulator_setup"), "tmp_robot_configs"
+            rospkg.RosPack().get_path("arena-simulation-setup"), "tmp_robot_configs"
         )
         os.makedirs(tmp_folder_path, exist_ok=True)
         tmp_config_name = self.ns + self.robot_id + ".robot_config.yaml"
